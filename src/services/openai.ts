@@ -1,10 +1,12 @@
-import OpenAI from 'openai';
-import dotenv from 'dotenv';
-import fs from 'fs/promises';
+// @ts-nocheck
+import dotenv from "dotenv";
+import fs from "fs/promises";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 dotenv.config();
 
-let openai: OpenAI | null = null;
+let genAI: GoogleGenerativeAI | null = null;
+let model: any = null;
 let language = process.env.LANGUAGE || "Python";
 
 interface Config {
@@ -14,30 +16,36 @@ interface Config {
 
 function updateConfig(config: Config) {
   if (!config.apiKey) {
-    throw new Error('OpenAI API key is required');
+    throw new Error("Gemini API key is required");
   }
-  
+
   try {
-    openai = new OpenAI({
-      apiKey: config.apiKey.trim(),
-    });
-    language = config.language || 'Python';
-    // console.log('OpenAI client initialized with new config');
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    model = genAI.getGenerativeModel({ model: "gemini-2.0-pro-exp-02-05" });
+    language = config.language || "Python";
   } catch (error) {
-    console.error('Error initializing OpenAI client:', error);
+    console.error("Error initializing Gemini client:", error);
     throw error;
   }
 }
 
 // Initialize with environment variables if available
-if (process.env.OPENAI_API_KEY) {
+
+console.log({
+  key: process.env.GEMINI_API_KEY,
+  language: process.env.LANGUAGE
+});
+if (process.env.GEMINI_API_KEY) {
   try {
     updateConfig({
-      apiKey: process.env.OPENAI_API_KEY,
-      language: process.env.LANGUAGE || 'Python'
+      apiKey: process.env.GEMINI_API_KEY,
+      language: process.env.LANGUAGE || "Python"
     });
   } catch (error) {
-    console.error('Error initializing OpenAI with environment variables:', error);
+    console.error(
+      "Error initializing Gemini with environment variables:",
+      error
+    );
   }
 }
 
@@ -48,65 +56,60 @@ interface ProcessedSolution {
   spaceComplexity: string;
 }
 
-type MessageContent = 
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: { url: string } };
-
-export async function processScreenshots(screenshots: { path: string }[]): Promise<ProcessedSolution> {
-  if (!openai) {
-    throw new Error('OpenAI client not initialized. Please configure API key first. Click CTRL/CMD + P to open settings and set the API key.');
+export async function processScreenshots(
+  screenshots: { path: string }[]
+): Promise<ProcessedSolution> {
+  if (!genAI || !model) {
+    throw new Error(
+      "Gemini client not initialized. Please configure API key first. Click CTRL/CMD + P to open settings and set the API key."
+    );
   }
 
   try {
-    const messages = [
-      {
-        role: "system" as const,
-        content: `You are an expert coding interview assistant. Analyze the coding question from the screenshots and provide a solution in ${language}.
+    // Create the prompt text
+    const systemPrompt = `You are an expert coding interview assistant. Analyze the coding question from the screenshots and provide a solution in ${language}.
                  Return the response in the following JSON format:
                  {
                    "approach": "Detailed approach to solve the problem on how are we solving the problem, that the interviewee will speak out loud and in easy explainatory words",
-                   "code": "The complete solution code",
+                   "code": "The complete optimal solution code",
                    "timeComplexity": "Big O analysis of time complexity with the reason",
                    "spaceComplexity": "Big O analysis of space complexity with the reason"
-                 }`
-      },
-      {
-        role: "user" as const,
-        content: [
-          { type: "text", text: "Here is a coding interview question. Please analyze and provide a solution." } as MessageContent
-        ]
-      }
-    ];
+                 }`;
 
-    // Add screenshots as image URLs
+    const userText =
+      "Here is a coding interview question. Please analyze and provide a solution.";
+
+    // Prepare content parts for Gemini
+    const parts = [{ text: systemPrompt + "\n\n" + userText }];
+
+    // Add screenshots as image parts
     for (const screenshot of screenshots) {
-      const base64Image = await fs.readFile(screenshot.path, { encoding: 'base64' });
-      messages.push({
-        role: "user" as const,
-        content: [
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:image/png;base64,${base64Image}`
-            }
-          } as MessageContent
-        ]
+      const imageData = await fs.readFile(screenshot.path);
+      parts.push({
+        inlineData: {
+          data: Buffer.from(imageData).toString("base64"),
+          mimeType: "image/png"
+        }
       });
     }
 
-    // Get response from OpenAI
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: messages as any,
-      max_tokens: 2000,
-      temperature: 0.7,
-      response_format: { type: "json_object" }
+    // Generate content with Gemini
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts }]
     });
 
-    const content = response.choices[0].message.content || '{}';
-    return JSON.parse(content) as ProcessedSolution;
+    const response = result.response;
+    const content = response.text();
+
+    // Extract JSON from the response
+    const jsonMatch =
+      content.match(/```json\n([\s\S]*?)\n```/) || content.match(/{[\s\S]*}/);
+
+    const jsonContent = jsonMatch ? jsonMatch[1] || jsonMatch[0] : content;
+
+    return JSON.parse(jsonContent) as ProcessedSolution;
   } catch (error) {
-    console.error('Error processing screenshots:', error);
+    console.error("Error processing screenshots:", error);
     throw error;
   }
 }
