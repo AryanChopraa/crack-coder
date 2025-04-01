@@ -22,6 +22,12 @@
   font-weight: normal;
 }
 
+.select-config{
+  display: flex;
+  justify-content: center;
+  gap: 10;
+}
+
 .form-group {
   margin-bottom: 0.75rem;
 }
@@ -31,6 +37,16 @@
   color: #edf1f5;
   margin-bottom: 0.25rem;
   font-size: 0.8rem;
+}
+
+.radio-group{
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.radio-label input{
+  margin-right: 10px;
 }
 
 .api-key-input {

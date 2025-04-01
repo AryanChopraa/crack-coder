@@ -34,6 +34,7 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.0",
     "dotenv": "^16.4.7",
     "openai": "^4.87.3",
     "react": "^18.2.0",
@@ -71,5 +72,9 @@
       ],
       "category": "Development"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sayedhanzala/crack-coder.git"
   }
 }
