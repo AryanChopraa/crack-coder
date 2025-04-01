@@ -18,6 +18,7 @@ interface ProcessedSolution {
 interface Config {
   apiKey: string;
   language: string;
+  provider: string;
 }
 
 declare global {
